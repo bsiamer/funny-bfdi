@@ -1,6 +1,7 @@
 {
 	"required": true,
 	"package": "xyz.imcodist.funnybfdi.mixin",
+	"refmap": "funnybfdi.refmap.json",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
 		"AvatarRendererMixin",
