@@ -1,7 +1,5 @@
 package xyz.imcodist.funnybfdi.other;
 
-import net.minecraft.text.Text;
-
 import java.util.ArrayList;
 import java.util.UUID;
 
@@ -21,13 +19,13 @@ public class MouthManager {
         playerMouths.removeIf(mouthState -> mouthState.queueForDeletion);
     }
 
-    public static void onPlayerChatted(Text message, UUID senderUUID) {
+    public static void onPlayerChatted(String message, UUID senderUUID) {
         if (!Config.enabled) return;
 
         MouthState mouthState = getOrCreatePlayerMouthState(senderUUID);
 
         mouthState.talkCharacter = 0;
-        mouthState.talkText = message.getString();
+        mouthState.talkText = message;
         mouthState.updateMouthShape();
 
         mouthState.talking = true;
@@ -36,7 +34,6 @@ public class MouthManager {
     public static MouthState getOrCreatePlayerMouthState(UUID playerUUID) {
         MouthState getState = getPlayerMouthState(playerUUID);
         if (getState != null) return getState;
-
 
         MouthState newPlayerState = new MouthState();
         newPlayerState.playerUUID = playerUUID;
@@ -113,6 +110,11 @@ public class MouthManager {
         }
 
         public void updateMouthShape() {
+            if (talkText.isEmpty()) {
+                currentMouthShape = "0";
+                return;
+            }
+
             String character = String.valueOf(talkText.charAt(talkCharacter));
 
             transitionMouthShape = currentMouthShape;

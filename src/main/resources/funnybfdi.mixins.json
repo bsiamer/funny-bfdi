@@ -1,9 +1,10 @@
 {
 	"required": true,
 	"package": "xyz.imcodist.funnybfdi.mixin",
-	"compatibilityLevel": "JAVA_17",
+	"compatibilityLevel": "JAVA_25",
 	"client": [
-		"PlayerEntityRendererMixin"
+		"AvatarRendererMixin",
+		"AvatarRenderStateMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

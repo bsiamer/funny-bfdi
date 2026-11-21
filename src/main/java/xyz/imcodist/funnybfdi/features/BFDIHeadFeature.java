@@ -1,91 +1,89 @@
 package xyz.imcodist.funnybfdi.features;
 
-import net.minecraft.client.model.*;
-import net.minecraft.client.render.OverlayTexture;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.entity.feature.FeatureRenderer;
-import net.minecraft.client.render.entity.feature.FeatureRendererContext;
-import net.minecraft.client.render.entity.model.EntityModel;
-import net.minecraft.client.render.entity.model.ModelWithHead;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.RotationAxis;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
+import net.minecraft.client.model.Model;
+import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.model.geom.PartPose;
+import net.minecraft.client.model.geom.builders.CubeListBuilder;
+import net.minecraft.client.model.geom.builders.LayerDefinition;
+import net.minecraft.client.model.geom.builders.MeshDefinition;
+import net.minecraft.client.model.geom.builders.PartDefinition;
+import net.minecraft.client.model.player.PlayerModel;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.entity.RenderLayerParent;
+import net.minecraft.client.renderer.entity.layers.RenderLayer;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.Unit;
 import xyz.imcodist.funnybfdi.FunnyBFDI;
+import xyz.imcodist.funnybfdi.accessor.BFDIRenderState;
 import xyz.imcodist.funnybfdi.other.Config;
 import xyz.imcodist.funnybfdi.other.MouthManager;
 
-public class BFDIHeadFeature<T extends LivingEntity, M extends EntityModel<T> & ModelWithHead> extends FeatureRenderer<T, M> {
-    private final ModelPart base;
+import java.util.UUID;
 
-    public BFDIHeadFeature(FeatureRendererContext<T, M> context) {
+public class BFDIHeadFeature extends RenderLayer<AvatarRenderState, PlayerModel> {
+    private final ModelPart base;
+    private final Model.Simple mouthModel;
+
+    public BFDIHeadFeature(RenderLayerParent<AvatarRenderState, PlayerModel> context) {
         super(context);
 
-        ModelData modelData = new ModelData();
-        ModelPartData modelPartData = modelData.getRoot();
-        modelPartData.addChild("mouth", ModelPartBuilder.create().uv(0, 0).cuboid(-4.0F, -8.0F, 4.51F, 8.0F, 16.0F, 0.0F), ModelTransform.pivot(0.0F, 0.0F, 0.0F));
-        TexturedModelData texturedModelData = TexturedModelData.of(modelData, 16, 16);
+        MeshDefinition meshDefinition = new MeshDefinition();
+        PartDefinition root = meshDefinition.getRoot();
+        root.addOrReplaceChild("mouth", CubeListBuilder.create().texOffs(0, 0).addBox(-4.0F, -8.0F, 4.51F, 8.0F, 16.0F, 0.0F), PartPose.ZERO);
+        LayerDefinition layerDefinition = LayerDefinition.create(meshDefinition, 16, 16);
 
-        this.base = texturedModelData.createModel().getChild("mouth");
+        this.base = layerDefinition.bakeRoot().getChild("mouth");
+        this.mouthModel = new Model.Simple(this.base, RenderTypes::entityTranslucent);
     }
 
     @Override
-    public void render(MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, T entity, float limbAngle, float limbDistance, float tickDelta, float animationProgress, float headYaw, float headPitch) {
+    public void submit(PoseStack matrices, SubmitNodeCollector submitNodeCollector, int light, AvatarRenderState state, float limbAngle, float limbDistance) {
         if (!Config.enabled) return;
         if (Config.mouthSize <= 0.0f) return;
 
-        ModelPart head = getContextModel().getHead();
-        if (entity.isInvisible()) return;
+        ModelPart head = getParentModel().getHead();
+        if (state.isInvisible) return;
         if (!head.visible) return;
 
-        MouthManager.MouthState mouthState = MouthManager.getPlayerMouthState(entity.getUuid());
+        BFDIRenderState bfdiState = (BFDIRenderState) state;
+        UUID playerUuid = bfdiState.bfdi$getUuid();
+        if (playerUuid == null) return;
 
+        MouthManager.MouthState mouthState = MouthManager.getPlayerMouthState(playerUuid);
+
+        float health = bfdiState.bfdi$getHealth();
         String mouthExpression = "normal";
-        if (entity.getHealth() <= 10) {
-            // when less then half health
+        if (health <= 10.0f) {
             mouthExpression = "sad";
         }
 
         String mouth = "idle";
 
-        // status effects
-        boolean hasAbsorb = false;
-        boolean hasPoison = false;
-        for (StatusEffectInstance effectInstance : entity.getStatusEffects()) {
-            if (effectInstance.getEffectType().equals(StatusEffects.ABSORPTION)) {
-                hasAbsorb = true;
-                continue;
-            }
+        boolean hasAbsorb = bfdiState.bfdi$hasAbsorption();
+        boolean hasPoison = bfdiState.bfdi$hasPoison();
 
-            if (effectInstance.getEffectType().equals(StatusEffects.POISON)) {
-                hasPoison = true;
-            }
-        }
-
-        // absorption
         if (mouthExpression.equals("normal") && hasAbsorb) {
             mouthExpression = "normal";
             mouth = "absorption";
         }
 
-        // is at critical hearts (shaky health bar oooo)
-        if (entity.getHealth() <= 4) {
+        if (health <= 4.0f) {
             mouthExpression = "sad";
             mouth = "critical";
         }
 
-        if (entity.isSubmergedInWater()) {
+        if (bfdiState.bfdi$isSubmergedInWater() || state.isInWater) {
             mouth = "water";
         }
 
-        // is talking
         if (mouthState != null && mouthState.talking) {
             String shape = mouthState.transitionMouthShape;
-
             if (!shape.equals("0")) {
                 if (!mouth.equals("absorption") && !mouth.equals("critical") && !mouth.equals("water")) {
                     mouth = "talk" + shape;
@@ -102,42 +100,30 @@ public class BFDIHeadFeature<T extends LivingEntity, M extends EntityModel<T> & 
             }
         }
 
-        // is hurt
-        if (entity.hurtTime > 0) {
+        if (bfdiState.bfdi$getHurtTime() > 0) {
             mouthExpression = "special";
             mouth = "hurt";
         }
 
-        RenderLayer renderLayer = RenderLayer.getEntityTranslucent(Identifier.of(FunnyBFDI.MOD_ID, "textures/mouths/" + mouthExpression + "/" + mouth + ".png"));
-        VertexConsumer vertices = vertexConsumers.getBuffer(renderLayer);
+        Identifier textureId = Identifier.fromNamespaceAndPath(FunnyBFDI.MOD_ID, "textures/mouths/" + mouthExpression + "/" + mouth + ".png");
+        RenderType renderType = RenderTypes.entityTranslucent(textureId);
 
         float offsetScale = 250.0f;
 
-        // make changes to the matrix
-        matrices.translate(head.pivotX / 8.0, head.pivotY / 16.0, head.pivotZ / 8.0);
+        matrices.pushPose();
 
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0F));
+        matrices.translate(head.x / 8.0, head.y / 16.0, head.z / 8.0);
+        matrices.rotateDegrees(Axis.YP, 180.0F);
 
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotation(head.yaw));
-        matrices.multiply(RotationAxis.NEGATIVE_X.rotation(head.pitch));
-        matrices.multiply(RotationAxis.NEGATIVE_Z.rotation(head.roll));
+        matrices.rotate(Axis.YP, head.yRot);
+        matrices.rotate(Axis.XN, head.xRot);
+        matrices.rotate(Axis.ZN, head.zRot);
 
         matrices.translate(Config.mouthOffsetX / -offsetScale, Config.mouthOffsetY / offsetScale, Config.mouthOffsetZ / offsetScale);
         matrices.scale(Config.mouthSize, Config.mouthSize, 1.0f);
 
-        // render
-        this.base.render(matrices, vertices, light, OverlayTexture.DEFAULT_UV);
+        submitNodeCollector.submitModel(this.mouthModel, Unit.INSTANCE, matrices, renderType, light, OverlayTexture.NO_OVERLAY, -1);
 
-        // revert all the changes i made to the matrix
-        matrices.scale(1.0f / Config.mouthSize, 1.0f / Config.mouthSize, 1.0f);
-        matrices.translate((Config.mouthOffsetX / -offsetScale) * -1.0f, (Config.mouthOffsetY / offsetScale) * -1.0f, (Config.mouthOffsetZ / offsetScale) * -1.0f);
-
-        matrices.multiply(RotationAxis.NEGATIVE_Z.rotation(-head.roll));
-        matrices.multiply(RotationAxis.NEGATIVE_X.rotation(-head.pitch));
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotation(-head.yaw));
-
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-180.0F));
-
-        matrices.translate((head.pivotX / 8.0) * -1.0f, (head.pivotY / 16.0) * -1.0f, (head.pivotZ / 8.0) * -1.0f);
+        matrices.popPose();
     }
 }

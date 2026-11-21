@@ -6,8 +6,7 @@ import de.maxhenkel.voicechat.api.audio.AudioConverter;
 import de.maxhenkel.voicechat.api.events.ClientReceiveSoundEvent;
 import de.maxhenkel.voicechat.api.events.ClientSoundEvent;
 import de.maxhenkel.voicechat.api.events.EventRegistration;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
 import xyz.imcodist.funnybfdi.FunnyBFDI;
 import xyz.imcodist.funnybfdi.other.MouthManager;
 
@@ -32,27 +31,23 @@ public class FunnyBFDIVoice implements VoicechatPlugin {
         return FunnyBFDI.MOD_ID;
     }
 
-
     public void onClientReceivedSound(ClientReceiveSoundEvent.EntitySound event) {
         float volume = getVolume(event.getRawAudio(), event.getVoicechat());
         if (volume < 100) return;
 
         String text = getMessage(volume);
-        // this is a terrible way to do this but its incredibly easy
-        MouthManager.onPlayerChatted(Text.of(text), event.getId());
+        MouthManager.onPlayerChatted(text, event.getId());
     }
 
     public void onClientSendSound(ClientSoundEvent event) {
-        if (MinecraftClient.getInstance().player == null) return;
+        if (Minecraft.getInstance().player == null) return;
 
         float volume = getVolume(event.getRawAudio(), event.getVoicechat());
         if (volume < 100) return;
 
         String text = getMessage(volume);
-        // this is a terrible way to do this but its incredibly easy
-        MouthManager.onPlayerChatted(Text.of(text), MinecraftClient.getInstance().player.getUuid());
+        MouthManager.onPlayerChatted(text, Minecraft.getInstance().player.getUUID());
     }
-
 
     private float getVolume(short[] rawAudio, VoicechatApi voicechatApi) {
         AudioConverter audioConverter = voicechatApi.getAudioConverter();
@@ -64,7 +59,7 @@ public class FunnyBFDIVoice implements VoicechatPlugin {
             average += num;
         }
 
-        average /= floats.length - 1;
+        average /= Math.max(1, floats.length - 1);
 
         return average;
     }
